@@ -122,7 +122,7 @@ with requests.Session() as session:
     json_vendas = consulta_operacoes_json(OPERACAO_VENDA, session)
     vendas = processa_titulos(session, json_vendas, OPERACAO_VENDA)
 
-    with open('/tmp/operacoes.csv', 'w') as csvfile:
+    with open('operacoes.csv', 'w') as csvfile:
         csvwriter = csv.writer(csvfile, delimiter=';')
         csvwriter.writerows(compras)
         csvwriter.writerows(vendas)
