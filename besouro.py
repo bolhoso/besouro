@@ -5,6 +5,7 @@ import sys
 import re
 import csv
 import os
+import datetime
 from bs4 import BeautifulSoup
 
 # Disables SSL truststore warnings, as we use sessions' verify=False
@@ -89,8 +90,9 @@ def processa_titulos (session, titulos, operacao):
             quantidade = -quantidade
             liquido = -liquido
             valor_bruto = -valor_bruto
-
-        line = [tit["TipoOperacao"], tit["DataOperacao"], tit["CodigoProtocolo"],
+        
+        data_operacao = datetime.datetime.strptime(tit["DataOperacao"], "%d/%m/%Y")
+        line = [tit["TipoOperacao"], data_operacao, tit["CodigoProtocolo"],
                 titulo, rentabilidade, 
                 quantidade, valor_unitario, valor_bruto,
                 taxa_corretora, taxa_b3, liquido]
@@ -118,8 +120,9 @@ with requests.Session() as session:
     json_vendas = consulta_operacoes_json(OPERACAO_VENDA, session)
     vendas = processa_titulos(session, json_vendas, OPERACAO_VENDA)
 
+    sorted_csv = sorted(compras + vendas, key=lambda row: row[1])
+
     print ("Generating CSV")
     with open('operacoes.csv', 'w') as csvfile:
-        csvwriter = csv.writer(csvfile, delimiter=';')
-        csvwriter.writerows(compras)
-        csvwriter.writerows(vendas)
+        csvwriter = csv.writer(csvfile, delimiter=';', quoting=csv.QUOTE_MINIMAL)
+        csvwriter.writerows(sorted_csv)
