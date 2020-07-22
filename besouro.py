@@ -7,6 +7,10 @@ import csv
 import os
 from bs4 import BeautifulSoup
 
+# Disables SSL truststore warnings, as we use sessions' verify=False
+import urllib3
+urllib3.disable_warnings()
+
 IS_DEBUG=False
 
 OPERACAO_COMPRA='1'
@@ -17,20 +21,13 @@ def do_login(session, user, password):
     soup = BeautifulSoup(response_ini.content, 'html.parser')
     verif_token = soup.find_all('input')[0].get("value")
 
+    print ("Logging in Portal do Investidor")
     session.post('https://portalinvestidor.tesourodireto.com.br/Login/ValidateLogin',
             data={'UserCpf': user,
                 'UserPassword': password,
                 'g-recaptcha-response': '',
                 '__RequestVerificationToken': verif_token},
             headers={
-                "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
-                "accept-language": "en-US,en;q=0.9,pt-BR;q=0.8,pt;q=0.7,es;q=0.6",
-                "cache-control": "max-age=0",
-                "content-type": "application/x-www-form-urlencoded",
-                "sec-fetch-dest": "document",
-                "sec-fetch-site": "same-origin",
-                "sec-fetch-user": "?1",
-                "upgrade-insecure-requests": "1",
                 'Origin': 'https://portalinvestidor.tesourodireto.com.br',
                 'Referer': 'https://portalinvestidor.tesourodireto.com.br/'
             },
@@ -41,22 +38,20 @@ def consulta_operacoes_json(tipo_operacao, session):
     soup = BeautifulSoup(response_ini.content, 'html.parser')
     verif_token = soup.find_all('form', action='/Consulta')[0].find_all("input", type="hidden")[0].get("value")
 
+    print ("Listing operacoes={}".format(tipo_operacao))
     response_consulta = session.post("https://portalinvestidor.tesourodireto.com.br/Consulta/ConsultarOperacoes",
             headers={
                 '__RequestVerificationToken': verif_token,
                 'Accept': 'application/json, text/javascript, */*; q=0.01',
                 'Origin': 'https://portalinvestidor.tesourodireto.com.br',
                 'Referer': 'https://portalinvestidor.tesourodireto.com.br/Consulta',
-                'Sec-Fetch-Site': 'same-origin',
-                'Sec-Fetch-Mode': 'cors',
-                'DNT': '1',
-                'Host': 'portalinvestidor.tesourodireto.com.br',
-                'Sec-Fetch-Dest': 'empty',
-                'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.97 Safari/537.36',
                 'X-Requested-With': 'XMLHttpRequest'
             },
-            data={"Operacao":"1","InstituicaoFinanceira":"386","DataInicial":"01/01/2016","DataFinal":"19/07/2020"})
-    return json.loads(response_consulta.content)['Operacoes']
+            data={"Operacao": tipo_operacao,"InstituicaoFinanceira":"386","DataInicial":"01/01/2016","DataFinal":"19/07/2020"})
+    ops_json = json.loads(response_consulta.content)['Operacoes']
+
+    print("Found {} operations with tipo={}".format(len(ops_json), tipo_operacao))
+    return ops_json
 
 
 def get_info_titulo(soup, index):
@@ -74,6 +69,7 @@ def processa_titulos (session, titulos, operacao):
             continue
 
         url = "https://portalinvestidor.tesourodireto.com.br/Protocolo/{}/{}".format(tit['CodigoProtocolo'], operacao)
+        print ("Fetching protocolo={}, url={}".format(tit['CodigoProtocolo'], url))
         response = session.get(url,
             headers={
             'Referer': 'https://portalinvestidor.tesourodireto.com.br/Consulta',
@@ -122,6 +118,7 @@ with requests.Session() as session:
     json_vendas = consulta_operacoes_json(OPERACAO_VENDA, session)
     vendas = processa_titulos(session, json_vendas, OPERACAO_VENDA)
 
+    print ("Generating CSV")
     with open('operacoes.csv', 'w') as csvfile:
         csvwriter = csv.writer(csvfile, delimiter=';')
         csvwriter.writerows(compras)
