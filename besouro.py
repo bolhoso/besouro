@@ -108,6 +108,33 @@ def processa_titulos (session, titulos, operacao):
 
     return csv
 
+def add_header_formulas(csv):
+    csv_with_header=[
+        ['Tipo', 'Data', 'Protocolo', 'Titulo',
+        'Rent %', 'Qtd', '$ Unit', '$ Compra Bruto',
+        'Tx Corret', 'Taxa B3', '$ Compra Liq',
+        'Compras Anteriores', 'Vendas Anteriores', 'Qtd Vendas Futuro',
+        'Saldo', 'Saldo Compra Liq',
+        'PU Atual', 'Saldo Atual', 'Lucro/Prej']]
+
+    line_num = 2
+    csv_index = 0
+    for line in csv:
+        line_str = str(line_num)
+        # TODO ui coxambra
+        csv_with_header.append(csv[csv_index] + [
+            '=if(AND(F@<>"";F@>0);sumifs(F$1:F1;F$1:F1;">0";D$1:D1;D@);"")'.replace('@', line_str),
+            '=if(AND(F@<>"";F@>0);SUMIFS(F$1:F1;F$1:F1;"<0";D$1:D1;D@);"")'.replace('@', line_str),
+            '=if(and(F@<>"";F@>0);sumifs(F3:F$84;F3:F$84;"<0";D3:D$84;D@);"")'.replace('@', line_str),
+            '=if(and(F@<>"";F@>0);floor(min(max(L@+M@+F@+N@;0);F@);0,01);"")'.replace('@', line_str),
+            '=if(O@>0;O@*G@+J@+I@;"")'.replace('@', line_str),
+            '=IF(ISERROR(VLOOKUP(D@;\'Preços Tesouro Direto\'!$A$36:$F$100;6;FALSE));"";VLOOKUP(D@;\'Preços Tesouro Direto\'!$A$36:$F$100;6;FALSE))'.replace('@', line_str),
+            '=if(and(O@>0;O@<>"");O@*Q@;"")'.replace('@', line_str),
+            '=if(O@>0;R@-K@;"")'.replace('@', line_str)])
+        line_num += 1
+        csv_index += 1
+
+    return csv_with_header
 
 with requests.Session() as session:
     user = os.environ.get('BESOURO_CPF')
@@ -120,9 +147,8 @@ with requests.Session() as session:
     json_vendas = consulta_operacoes_json(OPERACAO_VENDA, session)
     vendas = processa_titulos(session, json_vendas, OPERACAO_VENDA)
 
-    sorted_csv = sorted(compras + vendas, key=lambda row: row[1])
-
     print ("Generating CSV")
+    sorted_csv = add_header_formulas(sorted(compras + vendas, key=lambda row: row[1]))
     with open('operacoes.csv', 'w') as csvfile:
         csvwriter = csv.writer(csvfile, delimiter=';', quoting=csv.QUOTE_MINIMAL)
         csvwriter.writerows(sorted_csv)
