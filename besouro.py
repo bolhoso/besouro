@@ -79,19 +79,24 @@ def processa_titulos (session, titulos, operacao):
 
         titulo         = soup.find(class_='td-protocolo-info-titulo').text
         quantidade     = float(get_info_titulo(soup, 0))
-        valor_unitario = float(get_info_titulo(soup, 1))
-        rentabilidade  = float(get_info_titulo(soup, 2))/100
+        valor_unitario = str(float(get_info_titulo(soup, 1))).replace('.', ',')
+        rentabilidade  = str(float(get_info_titulo(soup, 2))/100).replace('.', ',')
         liquido        = float(get_info_titulo(soup, 3))
-        taxa_corretora = -float(get_info_titulo(soup, 4))
-        taxa_b3        = -float(get_info_titulo(soup, 5))
+        taxa_corretora = str(-float(get_info_titulo(soup, 4))).replace('.', ',')
+        taxa_b3        = str(-float(get_info_titulo(soup, 5))).replace('.', ',')
         valor_bruto    = float(get_info_titulo(soup, 6))
 
         if operacao == OPERACAO_VENDA:
             quantidade = -quantidade
             liquido = -liquido
             valor_bruto = -valor_bruto
+
+        quantidade = str(quantidade).replace('.', ',')
+        liquido = str(liquido).replace('.', ',')
+        valor_bruto = str(valor_bruto).replace('.', ',')
         
-        data_operacao = datetime.datetime.strptime(tit["DataOperacao"], "%d/%m/%Y")
+        data_operacao = str(datetime.datetime.strptime(tit["DataOperacao"], "%d/%m/%Y"))[0:10]
+        print(data_operacao)
         line = [tit["TipoOperacao"], data_operacao, tit["CodigoProtocolo"],
                 titulo, rentabilidade, 
                 quantidade, valor_unitario, valor_bruto,
@@ -117,20 +122,25 @@ def add_header_formulas(csv):
         'Saldo', 'Saldo Compra Liq',
         'PU Atual', 'Saldo Atual', 'Lucro/Prej']]
 
-    line_num = 2
+    line_num = 2 # Formula reference, starts at line 2 in spreadsheet, as 1 is header
     csv_index = 0
     for line in csv:
         line_str = str(line_num)
-        # TODO ui coxambra
         csv_with_header.append(csv[csv_index] + [
-            '=if(AND(F@<>"";F@>0);sumifs(F$1:F1;F$1:F1;">0";D$1:D1;D@);"")'.replace('@', line_str),
-            '=if(AND(F@<>"";F@>0);SUMIFS(F$1:F1;F$1:F1;"<0";D$1:D1;D@);"")'.replace('@', line_str),
-            '=if(and(F@<>"";F@>0);sumifs(F3:F$84;F3:F$84;"<0";D3:D$84;D@);"")'.replace('@', line_str),
-            '=if(and(F@<>"";F@>0);floor(min(max(L@+M@+F@+N@;0);F@);0,01);"")'.replace('@', line_str),
-            '=if(O@>0;O@*G@+J@+I@;"")'.replace('@', line_str),
+            # Col L - Compras Anteriores
+            '=if(AND(F@<>"";F@>0);sumifs(F$1:F#;F$1:F#;">0";D$1:D#;D@);"")'.replace('@', line_str).replace('#', str(line_num - 1)),
+            # Col M - Vendas Anteriores
+            '=if(AND(F@<>"";F@>0);SUMIFS(F$1:F#;F$1:F#;"<0";D$1:D#;D@);"")'.replace('@', line_str).replace('#', str(line_num - 1)),
+            # Col N - Vendas Futuras
+            '=if(and(F@<>"";F@>0);sumifs(F@:F$9999;F@:F$9999;"<0";D@:D$9999;D@);"")'.replace('@', line_str).replace('#', str(line_num - 1)),
+            # Col O - Saldo
+            '=if(and(F@<>"";F@>0);floor(min(max(L@+M@+F@+N@;0);F@);0,01);"")'.replace('@', line_str), 
+            # Col P - Saldo Compra Liq
+            '=if(O@>0;O@*G@+J@+I@;"")'.replace('@', line_str),                                        
+            # Col Q - PU Atual
             '=IF(ISERROR(VLOOKUP(D@;\'Preços Tesouro Direto\'!$A$36:$F$100;6;FALSE));"";VLOOKUP(D@;\'Preços Tesouro Direto\'!$A$36:$F$100;6;FALSE))'.replace('@', line_str),
-            '=if(and(O@>0;O@<>"");O@*Q@;"")'.replace('@', line_str),
-            '=if(O@>0;R@-K@;"")'.replace('@', line_str)])
+            '=if(and(O@>0;O@<>"");O@*Q@;"")'.replace('@', line_str), # Saldo Atual
+            '=if(O@>0;R@-K@;"")'.replace('@', line_str)])            # Lucro/Prej
         line_num += 1
         csv_index += 1
 
