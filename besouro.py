@@ -39,6 +39,8 @@ def consulta_operacoes_json(tipo_operacao, session):
     soup = BeautifulSoup(response_ini.content, 'html.parser')
     verif_token = soup.find_all('form', action='/Consulta')[0].find_all("input", type="hidden")[0].get("value")
 
+    data_atual = datetime.datetime.strftime(datetime.date.today(), "%d/%m/%Y")
+    print(data_atual)
     print ("Listing operacoes={}".format(tipo_operacao))
     response_consulta = session.post("https://portalinvestidor.tesourodireto.com.br/Consulta/ConsultarOperacoes",
             headers={
@@ -48,7 +50,7 @@ def consulta_operacoes_json(tipo_operacao, session):
                 'Referer': 'https://portalinvestidor.tesourodireto.com.br/Consulta',
                 'X-Requested-With': 'XMLHttpRequest'
             },
-            data={"Operacao": tipo_operacao,"InstituicaoFinanceira":"386","DataInicial":"01/01/2016","DataFinal":"19/07/2020"})
+            data={"Operacao": tipo_operacao,"InstituicaoFinanceira":"386","DataInicial":"01/01/2016","DataFinal":data_atual})
     ops_json = json.loads(response_consulta.content)['Operacoes']
 
     print("Found {} operations with tipo={}".format(len(ops_json), tipo_operacao))
@@ -95,8 +97,7 @@ def processa_titulos (session, titulos, operacao):
         liquido = str(liquido).replace('.', ',')
         valor_bruto = str(valor_bruto).replace('.', ',')
         
-        data_operacao = str(datetime.datetime.strptime(tit["DataOperacao"], "%d/%m/%Y"))[0:10]
-        print(data_operacao)
+        data_operacao = datetime.datetime.strptime(tit["DataOperacao"], "%d/%m/%Y") # uses datetime object for sorting
         line = [tit["TipoOperacao"], data_operacao, tit["CodigoProtocolo"],
                 titulo, rentabilidade, 
                 quantidade, valor_unitario, valor_bruto,
@@ -119,14 +120,14 @@ def add_header_formulas(csv):
         'Rent %', 'Qtd', '$ Unit', '$ Compra Bruto',
         'Tx Corret', 'Taxa B3', '$ Compra Liq',
         'Compras Anteriores', 'Vendas Anteriores', 'Qtd Vendas Futuro',
-        'Saldo', 'Saldo Compra Liq',
-        'PU Atual', 'Saldo Atual', 'Lucro/Prej']]
+        'Saldo Lote', 'Saldo Compra Liq',
+        'PU Atual', 'Saldo Atual Lote', 'Lucro/Prej']]
 
     line_num = 2 # Formula reference, starts at line 2 in spreadsheet, as 1 is header
     csv_index = 0
     for line in csv:
         line_str = str(line_num)
-        csv_with_header.append(csv[csv_index] + [
+        data_line = csv[csv_index] + [
             # Col L - Compras Anteriores
             '=if(AND(F@<>"";F@>0);sumifs(F$1:F#;F$1:F#;">0";D$1:D#;D@);"")'.replace('@', line_str).replace('#', str(line_num - 1)),
             # Col M - Vendas Anteriores
@@ -140,7 +141,9 @@ def add_header_formulas(csv):
             # Col Q - PU Atual
             '=IF(ISERROR(VLOOKUP(D@;\'Preços Tesouro Direto\'!$A$36:$F$100;6;FALSE));"";VLOOKUP(D@;\'Preços Tesouro Direto\'!$A$36:$F$100;6;FALSE))'.replace('@', line_str),
             '=if(and(O@>0;O@<>"");O@*Q@;"")'.replace('@', line_str), # Saldo Atual
-            '=if(O@>0;R@-K@;"")'.replace('@', line_str)])            # Lucro/Prej
+            '=if(O@>0;R@-K@;"")'.replace('@', line_str)]             # Lucro/Prej
+        data_line[1] = datetime.datetime.strftime(data_line[1], '%d/%m/%Y') # convert date back in br format
+        csv_with_header.append(data_line)
         line_num += 1
         csv_index += 1
 
